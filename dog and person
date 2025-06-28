@@ -1,0 +1,112 @@
+!nvdia-smi
+
+%cd drive/MyDrive/ColabNotebooks/
+
+!git clone https://github.com/AlexeyAB/darknet
+
+%cd darknet
+!sed -i 's/OPENCV=0/OPENCV=1/' Makefile
+!sed -i 's/GPU=0/GPU=1/' Makefile
+!sed -i 's/CUDNN=0/CUDNN=1/' Makefile
+!sed -i 's/CUDNN_HALF=0/CUDNN_HALF=1/' Makefile
+!sed -i 's/LIBSO=0/LIBSO=1/' Makefile
+#verify cuda
+!/usr/local/cuda/bin/nvcc --version
+
+!make
+
+# Connect the Colab notebook to Google Drive
+from google.colab import drive
+drive.mount('/content/gdrive')
+
+
+# check your data
+%cd /
+from glob import glob
+dataset_dir = "/content/sample_data"
+
+img_list = glob(dataset_dir+'*.png')
+# you should have images with labels.txt in same folder
+print("your images :",len(img_list))
+
+
+!pip install split-folders
+
+import sklearn
+from sklearn.model_selection import train_test_split
+
+from sklearn.model_selection import train_test_split
+train_img_list, val_img_list = train_test_split(img_list, test_size=0.1, random_state=42)
+print(len(train_img_list), len(val_img_list))
+
+
+import cv2
+import numpy as np
+
+!git clone https://github.com/pjreddie/darknet.git
+
+!wget https://github.com/pjreddie/darknet.git
+
+!wget https://data.pjreddie.com/files/yolov3.weights
+
+net = cv2.dnn.readNet('yolov3.weights', 'yolov3.cfg')
+classes = []
+with open('coco.names', 'r') as f:
+    classes = [line.strip() for line in f.readlines()]
+layer_names = net.getLayerNames()
+output_layers = [layer_names[i - 1] for i in net.getUnconnectedOutLayers()]
+colors = np.random.uniform(0, 255, size=(len(classes), 3))
+
+
+
+!wget https://raw.githubusercontent.com/pjreddie/darknet/master/cfg/yolov3.cfg
+!wget https://raw.githubusercontent.com/pjreddie/darknet/master/data/coco.names
+
+net = cv2.dnn.readNet('yolov3.weights', 'yolov3.cfg')
+classes = []
+with open('coco.names', 'r') as f:
+    classes = [line.strip() for line in f.readlines()]
+layer_names = net.getLayerNames()
+output_layers = [layer_names[i - 1] for i in net.getUnconnectedOutLayers()]
+colors = np.random.uniform(0, 255, size=(len(classes), 3))
+
+img = cv2.imread("/content/sample_data/69cc9d1e8d3bb749bd0392eedc1c0f05.jpg")
+img = cv2.resize(img, None, fx=0.4, fy=0.4)
+height, width, channels = img.shape
+
+blob = cv2.dnn.blobFromImage(img, 0.00392, (416, 416), (0, 0, 0), True, crop=False)
+net.setInput(blob)
+outs = net.forward(output_layers)
+
+class_ids = []
+confidences = []
+boxes = []
+for out in outs:
+    for detection in out:
+        scores = detection[5:]
+        class_id = np.argmax(scores)
+        confidence = scores[class_id]
+        if confidence > 0.5:
+            center_x = int(detection[0] * width)
+            center_y = int(detection[1] * height)
+            w = int(detection[2] * width)
+            h = int(detection[3] * height)
+            x = int(center_x - w / 2)
+            y = int(center_y - h / 2)
+            boxes.append([x, y, w, h])
+            confidences.append(float(confidence))
+            class_ids.append(class_id)
+
+indexes = cv2.dnn.NMSBoxes(boxes, confidences, 0.5, 0.4)
+
+from google.colab.patches import cv2_imshow
+
+font = cv2.FONT_HERSHEY_PLAIN
+for i in range(len(boxes)):
+    if i in indexes:
+        x, y, w, h = boxes[i]
+        label = str(classes[class_ids[i]])
+        color = colors[i]
+        cv2.rectangle(img, (x, y), (x + w, y + h), color, 2)
+        cv2.putText(img, label, (x, y + 30), font, 3, color, 3)
+cv2_imshow(img)
